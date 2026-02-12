@@ -76,7 +76,11 @@ class LogicHandler:
     @staticmethod
     def generate_candidates_api(api_key, topic_main, topic_sub1, topic_sub2, params):
         if not HAS_GENAI: raise Exception("gemini lib missing")
+        
+        # 【修正】APIキーを設定（引数名 api_key を使用）
         genai.configure(api_key=api_key)
+        
+        # 【修正】モデルを gemini-1.5-flash に変更
         model = genai.GenerativeModel("gemini-2.5-flash")
         
         prompt = f"""
@@ -171,8 +175,6 @@ class LogicHandler:
         # --- Step 2: Weighted & Normalized Solve ---
         print("\n=== [Step 2] Weighted Optimization ===")
         # ① 重み係数の適用
-        # Constraint: Normalize by fixed factor or treat as base, then apply weight.
-        # Previously hardcoded to 100.0, now using weights['constraint'].
         w_constraint = weights.get('constraint', 1.0)
         model_final = model_constraints * w_constraint
         print(f"Constraint: Weight = {w_constraint}")
@@ -270,10 +272,9 @@ class LogicHandler:
         h_len_penalty = 0.001 * (current_len - target)**2
         
         # ③ 推奨係数の設定（パラメータ最適化のみの場合）
-        # 設定(Diff)を重視しつつ、制約(Constraint)は緩く
         weights = {
             "diff": 1.0,       # 設定への適合を重視
-            "constraint": 1.0  # 制約は標準〜緩め (以前は100.0)
+            "constraint": 1.0  # 制約は標準〜緩め
         }
         
         return LogicHandler._solve_multi_stage(
@@ -313,11 +314,10 @@ class LogicHandler:
         h_len_penalty = 0.001 * (current_len - target)**2
         
         # ③ 推奨係数の設定（BBOの場合）
-        # 好み(Pref)を最優先、次に設定(Diff)、制約(Constraint)は緩く
         weights = {
             "pref": 10.0,       # 好みを最優先
             "diff": 1.0,       # 設定も重視
-            "constraint": 1.0  # 制約は緩く (以前は100.0)
+            "constraint": 1.0  # 制約は緩く
         }
         
         return LogicHandler._solve_multi_stage(
@@ -330,7 +330,11 @@ class LogicHandler:
     @staticmethod
     def generate_draft(api_key, selected, params):
         if not HAS_GENAI: raise Exception("gemini lib missing")
+        
+        # 【修正】APIキーを設定（引数名 api_key を使用）
         genai.configure(api_key=api_key)
+        
+        # 【修正】モデルを gemini-1.5-flash に変更
         model = genai.GenerativeModel("gemini-2.5-flash")
         
         materials = "\n".join([f"[{item['type']}] {item['text']}" for item in selected])
@@ -375,6 +379,11 @@ class LogicHandler:
     @staticmethod
     def generate_final(api_key, draft, instr):
         if not HAS_GENAI: raise Exception("gemini lib missing")
+        
+        # 【修正】APIキーを設定（引数名 api_key を使用）
         genai.configure(api_key=api_key)
+        
+        # 【修正】モデルを gemini-1.5-flash に変更
         model = genai.GenerativeModel("gemini-2.5-flash")
+        
         return LogicHandler._safe_generate(model, f"以下の指示に基づいてこの文章を推敲してください: {instr}\n文章:\n{draft}")
