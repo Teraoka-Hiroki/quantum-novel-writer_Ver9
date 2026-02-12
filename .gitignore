@@ -1,0 +1,19 @@
+# APIキーと設定ファイル
+APIキー (1).txt
+settings.json
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Node.js
+node_modules/
+dist/
+.vite/
+
+# OS
+.DS_Store

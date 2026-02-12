@@ -1,0 +1,5 @@
+{
+  "name": "Quantum Novel Writer",
+  "description": "量子アニーリングを活用した、最適なプロットとキャラクター構成のための小説執筆アシスタント。",
+  "requestFramePermissions": []
+}
