@@ -1,5 +1,16 @@
+import sys
+import os
+
+# 【追加】現在実行中のファイル(server.py)があるフォルダを検索対象に加える
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from flask import Flask, request, jsonify, send_file, send_from_directory
-from logic import LogicHandler
+from logic import LogicHandler  # これで読み込めるようになります
+import io
+# ... (以下変更なし)
+
+
+
 import io
 import os
 import json
