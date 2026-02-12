@@ -22,9 +22,12 @@ SETTINGS_FILE = "settings.json"
 
 def _default_settings():
     return {
-        "gemini_key": "",
-        "amplify_token": "",
+        # Renderの環境変数から読み込む（なければ空文字）
+        "gemini_key": os.environ.get("GEMINI_API_KEY", ""),
+        "amplify_token": os.environ.get("AMPLIFY_TOKEN", ""),
+        
         "topic_main": "",
+        # ... (以下同じ)
         "topic_sub1": "",
         "topic_sub2": "",
         "params": {

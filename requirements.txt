@@ -3,5 +3,5 @@ flask-cors
 google-generativeai
 numpy
 scikit-learn
-amplify
+amplify<1.0.0
 gunicorn
