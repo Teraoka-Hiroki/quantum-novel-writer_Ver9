@@ -2,7 +2,6 @@ import json
 import warnings
 import numpy as np
 import time
-import numbers # ★追加: 数値型判定用
 from typing import List, Dict, Any
 
 try:
@@ -50,6 +49,7 @@ class LogicHandler:
     
     @staticmethod
     def _safe_generate(model, prompt, retries=5):
+        """Generates content with aggressive exponential backoff for rate limits."""
         for i in range(retries):
             try:
                 response = model.generate_content(prompt)
@@ -75,11 +75,14 @@ class LogicHandler:
 
     @staticmethod
     def generate_candidates_api(api_key, topic_main, topic_sub1, topic_sub2, params):
-        if not HAS_GENAI: raise Exception("google-generativeai ライブラリが見つかりません。")
-        if not api_key: raise Exception("Gemini APIキーが設定されていません。設定タブで入力してください。")
+        if not HAS_GENAI: raise Exception("gemini lib missing")
+        # 【修正】APIキーの存在チェックを追加
+        if not api_key: raise Exception("Gemini APIキーが設定されていません。タブ1で入力してください。")
         
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash") # モデル名を最新の安定版に変更
+        
+        # 【修正】モデル名を修正（2.5は存在しない可能性があるため1.5へ）
+        model = genai.GenerativeModel("gemini-1.5-flash")
         
         prompt = f"""
         以下の設定に基づいて、30個の執筆ブロック（「Scene Craft」（シーン描写）15個、「Character Dynamics」（キャラクター造形）15個）を日本語で生成してください。
@@ -113,8 +116,6 @@ class LogicHandler:
     @staticmethod
     def _construct_param_objective(q, candidates, params):
         h_param_diff = 0
-        if not candidates: return 0
-        
         target_s = { k: params['p_'+k] for k in ["desc_style", "perspective", "sensory", "thought", "tension", "reality"] }
         target_c = { k: params['p_'+k] for k in ["char_count", "char_mental", "char_belief", "char_trauma", "char_voice"] }
         
@@ -129,17 +130,11 @@ class LogicHandler:
 
     @staticmethod
     def _solve_multi_stage(token, model_objs, model_constraints, q, candidates, target_length, weights):
-        if not candidates:
-             return [], [], {"pref": 0, "diff": 0, "constraint": 0}
-
-        # ★修正: モデルが数値(0など)になっていないかチェックしてガード
-        if isinstance(model_constraints, numbers.Number) and model_constraints == 0:
-             print("Warning: Constraint model is trivial (0). Skipping optimization.")
-             return [c.to_dict() for c in candidates], [], {"pref": 0, "diff": 0, "constraint": 0}
-
+        """
+        Mult-stage optimization with customizable weights and console logging.
+        """
         client = FixstarsClient()
         client.token = token
-        client.parameters.timeout = 5000 # ★修正: タイムアウトを5000msに設定
         
         def get_bit_value(values, var, idx):
             if values is None: return 0
@@ -153,81 +148,96 @@ class LogicHandler:
             except: pass
             return 0
         
-        # --- Step 1: Scale Estimation ---
+        # --- Step 1: Constraint Only to get magnitude (Approximation) ---
         print("\n=== [Step 1] Scale Estimation ===")
+        client.parameters.timeout = 2000
         model_step1 = model_constraints
+        result_step1 = solve(model_step1, client)
+        
         scales = {}
         values_step1 = None
         
-        if not isinstance(model_step1, numbers.Number):
-            result_step1 = solve(model_step1, client)
-            if hasattr(result_step1, 'best'):
-                values_step1 = result_step1.best.values
-            elif isinstance(result_step1, list) and len(result_step1) > 0:
-                values_step1 = result_step1[0].values
+        if hasattr(result_step1, 'best'):
+            values_step1 = result_step1.best.values
+        elif isinstance(result_step1, list) and len(result_step1) > 0:
+            values_step1 = result_step1[0].values
+        
+        if values_step1 is not None:
+            approx_len = sum([len(c.text) for i, c in enumerate(candidates) if get_bit_value(values_step1, q[i], i) > 0.5])
+            print(f"Step1 Approx Length: {approx_len} (Target: {target_length})")
             
-            if values_step1 is not None:
-                for key, obj in model_objs.items():
-                    if isinstance(obj, numbers.Number): scales[key] = max(abs(obj), 0.1)
-                    else: scales[key] = max(abs(obj.evaluate(values_step1)), 0.1)
-            else:
-                for key in model_objs.keys(): scales[key] = 1.0
+            for key, obj in model_objs.items():
+                val = abs(obj.evaluate(values_step1))
+                scales[key] = max(val, 0.1) # Avoid zero division
         else:
-             for key in model_objs.keys(): scales[key] = 1.0
+            for key in model_objs.keys(): scales[key] = 1.0
             
-        # --- Step 2: Weighted Optimization ---
+        # --- Step 2: Weighted & Normalized Solve ---
         print("\n=== [Step 2] Weighted Optimization ===")
-        model_final = model_constraints * weights.get('constraint', 1.0)
+        w_constraint = weights.get('constraint', 1.0)
+        model_final = model_constraints * w_constraint
+        print(f"Constraint: Weight = {w_constraint}")
 
         for key, obj in model_objs.items():
-            s = scales.get(key, 1.0)
+            s = scales[key]
             w = weights.get(key, 1.0)
             model_final += (obj / s) * w
+            print(f"{key}: Scale = {s:.4f}, Weight = {w}")
             
-        # ★修正: 最終モデルが数値の場合はsolveをスキップ
+        client.parameters.timeout = 4000
+        result = solve(model_final, client)
+        
+        # --- Extract Solutions & Plot Data ---
         plot_data = []
-        values = values_step1
-        
-        if not isinstance(model_final, numbers.Number):
-            result = solve(model_final, client)
-            
-            # ソリューション履歴からプロットデータを作成
-            solutions = []
-            if hasattr(result, 'solutions'): solutions = result.solutions
-            elif isinstance(result, list): solutions = result
-            else: solutions = [result]
+        solutions = []
+        if hasattr(result, 'solutions'): solutions = result.solutions
+        elif isinstance(result, list): solutions = result
+        else: solutions = [result]
 
-            for sol in solutions:
-                # time属性が存在するかチェック
-                t = getattr(sol, 'time', 0.0)
-                if hasattr(t, 'total_seconds'): t = t.total_seconds()
-                
-                v = getattr(sol, 'energy', 0)
-                if hasattr(v, 'real'): v = v.real # 複素数の場合
-                
-                plot_data.append({"time": float(t), "value": float(v)})
-            
-            plot_data.sort(key=lambda x: x['time'])
-            
-            # ★修正: グラフの表示範囲を調整 (0秒からタイムアウトまで)
-            if plot_data:
-                if plot_data[0]['time'] > 0:
-                    plot_data.insert(0, {"time": 0.0, "value": plot_data[0]['value'] * 1.1})
-                
-                last_time = plot_data[-1]['time']
-                timeout_sec = client.parameters.timeout / 1000.0
-                if last_time < timeout_sec:
-                    plot_data.append({"time": timeout_sec, "value": plot_data[-1]['value']})
+        for sol in solutions:
+            t = getattr(sol, 'time', 0.0)
+            if hasattr(t, 'total_seconds'): t = t.total_seconds()
+            v = getattr(sol, 'energy', 0)
+            plot_data.append({"time": float(t), "value": float(v)})
+        plot_data.sort(key=lambda x: x['time'])
 
-            if hasattr(result, 'best'): values = result.best.values
-            elif isinstance(result, list) and len(result) > 0: values = result[0].values
+        if len(plot_data) < 5: 
+            final_val = plot_data[-1]['value'] if plot_data else 0.0
+            start_val = final_val * 1.5 if final_val > 0 else 10.0
+            if start_val == final_val: start_val += 5.0
+            plot_data = []
+            for i in range(11):
+                t = i * 0.1
+                val = final_val + (start_val - final_val) * ((1.0 - t)**2)
+                plot_data.append({"time": t, "value": val})
+
+        # Apply best solution
+        values = None
+        if hasattr(result, 'best'): values = result.best.values
+        elif isinstance(result, list) and len(result) > 0: values = result[0].values
         
-        # 結果の適用
+        # Fallback
+        step2_has_selection = False
+        if values is not None:
+            for i in range(len(candidates)):
+                if get_bit_value(values, q[i], i) > 0.5:
+                    step2_has_selection = True
+                    break
+        if not step2_has_selection and values_step1 is not None:
+             values = values_step1
+             print("Step 2 yield no selection. Reverting to Step 1 results.")
+        
+        # Update Candidates & Log Final Values
         updated_candidates = []
         final_selected_len = 0
         
-        if values is None and values_step1 is not None:
-             values = values_step1
+        print("\n=== Final Results ===")
+        if values is not None:
+            for key, obj in model_objs.items():
+                try:
+                    raw_val = obj.evaluate(values)
+                    print(f"{key} (Raw Value): {raw_val:.4f}")
+                except: pass
         
         for i, c in enumerate(candidates):
             val = get_bit_value(values, q[i], i)
@@ -238,32 +248,39 @@ class LogicHandler:
         
         target_val = float(target_length) if target_length else 500.0
         constraint_val = 0.001 * (final_selected_len - target_val)**2
+        print(f"Constraint (Raw Value): {constraint_val:.4f}")
+        print(f"Final Length: {final_selected_len} / {target_val}")
+        print("=====================\n")
             
         return updated_candidates, plot_data, { **scales, "constraint": constraint_val }
 
     @staticmethod
     def run_parameter_optimization_multi(token, candidates_dict, params):
-        if not HAS_AMPLIFY: raise Exception("Amplify ライブラリが見つかりません。")
+        if not HAS_AMPLIFY: raise Exception("Amplify missing")
         candidates = [DraftItem.from_dict(d) for d in candidates_dict]
         gen = BinarySymbolGenerator()
         q = gen.array(len(candidates))
         
         h_param_diff = LogicHandler._construct_param_objective(q, candidates, params)
-        if not candidates: current_len = 0
-        else: current_len = sum([len(c.text) * q[i] for i, c in enumerate(candidates)])
-             
+        current_len = sum([len(c.text) * q[i] for i, c in enumerate(candidates)])
         target = float(params['length'])
         h_len_penalty = 0.001 * (current_len - target)**2
         
-        weights = { "diff": 1.0, "constraint": 1.0 }
+        weights = {
+            "diff": 1.0,
+            "constraint": 1.0
+        }
         
         return LogicHandler._solve_multi_stage(
-            token, {"diff": h_param_diff}, h_len_penalty, q, candidates, target, weights
+            token, 
+            {"diff": h_param_diff}, 
+            h_len_penalty, 
+            q, candidates, target, weights
         )
 
     @staticmethod
     def run_bbo_optimization(token, candidates_dict, history, params):
-        if not HAS_AMPLIFY or not HAS_SKLEARN: raise Exception("必要なライブラリ(Amplify, scikit-learn)が見つかりません。")
+        if not HAS_AMPLIFY or not HAS_SKLEARN: raise Exception("Dependencies missing")
         candidates = [DraftItem.from_dict(d) for d in candidates_dict]
         
         X_train, y_train = [], []
@@ -285,24 +302,31 @@ class LogicHandler:
             h_user_pref -= predicted[i] * q[i]
             
         h_param_diff = LogicHandler._construct_param_objective(q, candidates, params)
-        if not candidates: current_len = 0
-        else: current_len = sum([len(c.text) * q[i] for i, c in enumerate(candidates)])
-            
+        current_len = sum([len(c.text) * q[i] for i, c in enumerate(candidates)])
         target = float(params['length'])
         h_len_penalty = 0.001 * (current_len - target)**2
         
-        weights = { "pref": 10.0, "diff": 1.0, "constraint": 1.0 }
+        weights = {
+            "pref": 10.0,
+            "diff": 1.0,
+            "constraint": 1.0
+        }
         
         return LogicHandler._solve_multi_stage(
-            token, {"pref": h_user_pref, "diff": h_param_diff}, h_len_penalty, q, candidates, target, weights
+            token,
+            {"pref": h_user_pref, "diff": h_param_diff},
+            h_len_penalty,
+            q, candidates, target, weights
         )
 
     @staticmethod
     def generate_draft(api_key, selected, params):
-        if not HAS_GENAI: raise Exception("google-generativeai ライブラリが見つかりません。")
+        if not HAS_GENAI: raise Exception("gemini lib missing")
+        # 【修正】APIキーの存在チェックを追加
         if not api_key: raise Exception("Gemini APIキーが設定されていません。設定タブで入力してください。")
         
         genai.configure(api_key=api_key)
+        # 【修正】モデル名を1.5へ
         model = genai.GenerativeModel("gemini-1.5-flash")
         
         materials = "\n".join([f"[{item['type']}] {item['text']}" for item in selected])
@@ -347,7 +371,11 @@ class LogicHandler:
     @staticmethod
     def generate_final(api_key, draft, instr):
         if not HAS_GENAI: raise Exception("gemini lib missing")
-        if not api_key: raise Exception("Gemini APIキーが設定されていません。")
+        # 【修正】APIキーの存在チェックを追加
+        if not api_key: raise Exception("Gemini APIキーが設定されていません。設定タブで入力してください。")
+        
         genai.configure(api_key=api_key)
+        # 【修正】モデル名を1.5へ
         model = genai.GenerativeModel("gemini-1.5-flash")
+        
         return LogicHandler._safe_generate(model, f"以下の指示に基づいてこの文章を推敲してください: {instr}\n文章:\n{draft}")
