@@ -1,18 +1,11 @@
 import sys
 import os
 
-# 【追加】現在実行中のファイル(server.py)があるフォルダを検索対象に加える
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from flask import Flask, request, jsonify, send_file, send_from_directory
-from logic import LogicHandler  # これで読み込めるようになります
+from flask import Flask, request, jsonify, send_file, send_from_directory, make_response
+from logic import LogicHandler
 import io
-# ... (以下変更なし)
-
-
-
-import io
-import os
 import json
 import traceback
 
@@ -22,12 +15,9 @@ SETTINGS_FILE = "settings.json"
 
 def _default_settings():
     return {
-        # Renderの環境変数から読み込む（なければ空文字）
         "gemini_key": os.environ.get("GEMINI_API_KEY", ""),
         "amplify_token": os.environ.get("AMPLIFY_TOKEN", ""),
-        
         "topic_main": "",
-        # ... (以下同じ)
         "topic_sub1": "",
         "topic_sub2": "",
         "params": {
@@ -120,7 +110,6 @@ def optimize():
     save_settings(DATA_STORE)
 
     try:
-        # Legacy optimization now also uses multi-stage normalization
         result = LogicHandler.run_parameter_optimization_multi(
             DATA_STORE['amplify_token'],
             DATA_STORE['candidates'],
@@ -232,15 +221,23 @@ def download_file():
     mem = io.BytesIO()
     mem.write(DATA_STORE.get('final_text', '').encode('utf-8'))
     mem.seek(0)
-    return send_file(mem, as_attachment=True, download_name='novel_scene.txt', mimetype='text/plain')
+    response = make_response(send_file(mem, as_attachment=True, download_name='novel_scene.txt', mimetype='text/plain'))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 @app.route('/api/download_settings')
 def download_settings():
     global DATA_STORE
     mem = io.BytesIO()
+    # ensure_ascii=False で日本語文字化け防止
     mem.write(json.dumps(DATA_STORE, ensure_ascii=False, indent=2).encode('utf-8'))
     mem.seek(0)
-    return send_file(mem, as_attachment=True, download_name='settings.json', mimetype='application/json')
+    response = make_response(send_file(mem, as_attachment=True, download_name='settings.json', mimetype='application/json'))
+    # ブラウザキャッシュの無効化
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.route('/api/settings/upload', methods=['POST'])
 def upload_settings():
@@ -250,14 +247,12 @@ def upload_settings():
     if f.filename == '': return jsonify({"status": "error", "message": "No file selected"}), 400
     
     try:
-        # Robustly read file content
         f.seek(0)
         content_bytes = f.read()
         
         if len(content_bytes) == 0:
             return jsonify({"status": "error", "message": "File is empty"}), 400
             
-        # Robust decoding to handle BOM
         try:
             content = content_bytes.decode('utf-8-sig').strip()
         except UnicodeDecodeError:
@@ -266,7 +261,6 @@ def upload_settings():
         if not content:
             return jsonify({"status": "error", "message": "File content is empty"}), 400
             
-        # Check for HTML content
         if content.lstrip().startswith('<'):
              return jsonify({
                  "status": "error", 
@@ -276,7 +270,6 @@ def upload_settings():
         data = json.loads(content)
         DATA_STORE.update(data)
         
-        # Recalculate constraint metric based on uploaded candidates
         if 'candidates' in DATA_STORE and 'params' in DATA_STORE:
             try:
                 metrics = LogicHandler.recalculate_scales(DATA_STORE['candidates'], DATA_STORE['params'])
@@ -285,7 +278,6 @@ def upload_settings():
                         DATA_STORE['optimization_scales'] = {}
                     DATA_STORE['optimization_scales'].update(metrics)
             except Exception as e:
-                # 候補データの形式が古い場合などは計算をスキップするが、アップロード自体は成功させる
                 print(f"Warning: Failed to recalculate scales on upload: {e}")
 
         save_settings(DATA_STORE)
