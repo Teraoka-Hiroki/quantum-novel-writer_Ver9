@@ -1,6 +1,7 @@
 import sys
 import os
 
+# パス設定
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, request, jsonify, send_file, send_from_directory, make_response
@@ -13,6 +14,7 @@ app = Flask(__name__, static_folder='../dist', static_url_path='/')
 
 SETTINGS_FILE = "settings.json"
 
+# ... (中略: _default_settings, load_settings, save_settings は変更なし) ...
 def _default_settings():
     return {
         "gemini_key": os.environ.get("GEMINI_API_KEY", ""),
@@ -55,10 +57,12 @@ def save_settings(data):
 
 DATA_STORE = load_settings()
 
+# ... (中略: route index 変更なし) ...
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
 
+# ... (Generate Candidates 変更なし) ...
 @app.route('/api/generate_candidates', methods=['POST'])
 def generate_candidates():
     global DATA_STORE
@@ -88,6 +92,7 @@ def generate_candidates():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ... (Update Rating 変更なし) ...
 @app.route('/api/update_rating', methods=['POST'])
 def update_rating():
     global DATA_STORE
@@ -101,6 +106,7 @@ def update_rating():
     save_settings(DATA_STORE)
     return jsonify({"status": "success"})
 
+# ... (Optimize 変更なし) ...
 @app.route('/api/optimize', methods=['POST'])
 def optimize():
     global DATA_STORE
@@ -129,6 +135,7 @@ def optimize():
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ... (BBO Step 変更なし) ...
 @app.route('/api/bbo_step', methods=['POST'])
 def bbo_step():
     global DATA_STORE
@@ -169,6 +176,7 @@ def bbo_step():
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ... (BBO Reset 変更なし) ...
 @app.route('/api/bbo_reset', methods=['POST'])
 def bbo_reset():
     global DATA_STORE
@@ -177,6 +185,7 @@ def bbo_reset():
     save_settings(DATA_STORE)
     return jsonify({"status": "success"})
 
+# ... (Generate Draft 変更なし) ...
 @app.route('/api/generate_draft', methods=['POST'])
 def generate_draft():
     global DATA_STORE
@@ -194,6 +203,7 @@ def generate_draft():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ... (Save Draft Edit 変更なし) ...
 @app.route('/api/save_draft_edit', methods=['POST'])
 def save_draft_edit():
     global DATA_STORE
@@ -202,6 +212,7 @@ def save_draft_edit():
     save_settings(DATA_STORE)
     return jsonify({"status": "success"})
 
+# ... (Generate Final 変更なし) ...
 @app.route('/api/generate_final', methods=['POST'])
 def generate_final():
     global DATA_STORE
@@ -215,30 +226,32 @@ def generate_final():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ... (Download File 変更なし) ...
 @app.route('/api/download')
 def download_file():
     global DATA_STORE
     mem = io.BytesIO()
     mem.write(DATA_STORE.get('final_text', '').encode('utf-8'))
     mem.seek(0)
+    # キャッシュ対策
     response = make_response(send_file(mem, as_attachment=True, download_name='novel_scene.txt', mimetype='text/plain'))
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
+# ★修正: 設定ファイルダウンロードのキャッシュ無効化と文字化け対策
 @app.route('/api/download_settings')
 def download_settings():
     global DATA_STORE
     mem = io.BytesIO()
-    # ensure_ascii=False で日本語文字化け防止
     mem.write(json.dumps(DATA_STORE, ensure_ascii=False, indent=2).encode('utf-8'))
     mem.seek(0)
     response = make_response(send_file(mem, as_attachment=True, download_name='settings.json', mimetype='application/json'))
-    # ブラウザキャッシュの無効化
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
 
+# ... (Upload Settings 変更なし) ...
 @app.route('/api/settings/upload', methods=['POST'])
 def upload_settings():
     global DATA_STORE
