@@ -13,23 +13,19 @@ interface Props {
 export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams, onGenerate, isLoading }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 【修正箇所 1/2】: クライアントサイドでJSONファイルを生成してダウンロードする関数を追加
+  // 【修正】クライアントサイドでJSONファイルを生成してダウンロード
   const handleDownloadSettings = () => {
-    // 現在のstateを整形されたJSON文字列に変換
+    // 現在のstateをJSON文字列に変換
     const jsonString = JSON.stringify(state, null, 2);
-    
-    // Blobオブジェクト（ファイルのようなデータ）を作成
+    // Blobオブジェクトを作成
     const blob = new Blob([jsonString], { type: 'application/json' });
-    
-    // ダウンロード用のリンクを動的に作成してクリックさせる
+    // ダウンロードリンクを作成してクリック
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'settings.json';
     document.body.appendChild(link);
     link.click();
-    
-    // 後始末
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
@@ -43,7 +39,7 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
            
            const contentType = res.headers.get("content-type");
            if (contentType && contentType.indexOf("application/json") !== -1) {
-               constSV result = await res.json();
+               const result = await res.json();
                if (result.status === 'success' && result.settings) {
                    const s = result.settings;
                    updateState({
@@ -148,7 +144,7 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
             現在の設定をダウンロードして保存するか、アップロードして復元します。
         </p>
         <div className="flex flex-wrap gap-4">
-            {/* 【修正箇所 2/2】: <a>タグを <button> に変更し、onClickで関数を呼ぶ */}
+            {/* 【修正】サーバー経由リンクではなく、関数実行ボタンに変更 */}
             <button 
                 onClick={handleDownloadSettings}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition cursor-pointer"
@@ -171,13 +167,12 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
         </div>
       </div>
 
-      {/* 以下、変更なし */}
+      {/* Scene Settings */}
       <div className="mb-8">
         <h5 className="text-lg font-bold text-gray-200 mb-4 flex items-center">
             <Book className="w-5 h-5 mr-2 text-blue-400" />
             シーン設定
         </h5>
-        {/* ... (省略) ... */}
         <div className="space-y-4">
             <div>
                 <label className="block text-sm font-bold mb-1 text-gray-300">設定 1 (必須) <span className="text-red-400">*</span></label>
