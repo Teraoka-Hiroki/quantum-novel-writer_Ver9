@@ -82,10 +82,10 @@ class LogicHandler:
         genai.configure(api_key=api_key)
         
         # 【修正】モデル名を修正（2.5は存在しない可能性があるため1.5へ）
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         
         prompt = f"""
-        以下の設定に基づいて、30個の執筆ブロック（「Scene Craft」（シーン描写）15個、「Character Dynamics」（キャラクター造形）15個）を日本語で生成してください。
+        以下の設定に基づいて、10個の執筆ブロック（「Scene Craft」（シーン描写）5個、「Character Dynamics」（キャラクター造形）5個）を日本語で生成してください。
         
         メイン設定: {topic_main}
         サブ設定1: {topic_sub1}
@@ -327,7 +327,7 @@ class LogicHandler:
         
         genai.configure(api_key=api_key)
         # 【修正】モデル名を1.5へ
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         
         materials = "\n".join([f"[{item['type']}] {item['text']}" for item in selected])
         target_len = params.get('length', 500)
@@ -376,6 +376,6 @@ class LogicHandler:
         
         genai.configure(api_key=api_key)
         # 【修正】モデル名を1.5へ
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         
         return LogicHandler._safe_generate(model, f"以下の指示に基づいてこの文章を推敲してください: {instr}\n文章:\n{draft}")
