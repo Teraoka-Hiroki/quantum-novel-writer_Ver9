@@ -13,6 +13,23 @@ interface Props {
 export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams, onGenerate, isLoading }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ★修正: クライアントサイドでJSONファイルを生成してダウンロード
+  const handleDownloadSettings = () => {
+    // 現在のstateをJSON文字列に変換
+    const jsonString = JSON.stringify(state, null, 2);
+    // Blobオブジェクトを作成
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    // ダウンロードリンクを作成してクリック
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'settings.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
        const formData = new FormData();
@@ -20,7 +37,6 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
        try {
            const res = await fetch('/api/settings/upload', { method: 'POST', body: formData });
            
-           // レスポンスがJSONかどうかを確認
            const contentType = res.headers.get("content-type");
            if (contentType && contentType.indexOf("application/json") !== -1) {
                const result = await res.json();
@@ -45,17 +61,15 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
                    alert("読み込みエラー: " + (result.message || "不明なエラー"));
                }
            } else {
-               // JSON以外（HTMLエラーページなど）が返ってきた場合
                const text = await res.text();
                console.error("Server Error Response:", text);
-               alert("サーバーエラーが発生しました（JSON以外の応答）。コンソールを確認してください。\nサーバーが起動していないか、クラッシュしている可能性があります。");
+               alert("サーバーエラーが発生しました（JSON以外の応答）。");
            }
        } catch (err) {
            console.error(err);
            alert("通信エラーが発生しました: " + (err as Error).message);
        }
        
-       // Reset input
        if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -130,13 +144,13 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
             現在の設定をダウンロードして保存するか、アップロードして復元します。
         </p>
         <div className="flex flex-wrap gap-4">
-            <a 
-                href="/api/download_settings" 
-                download="settings.json"
-                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition"
+            {/* ★修正: サーバー経由ではなく、関数呼び出しに変更 */}
+            <button 
+                onClick={handleDownloadSettings}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition cursor-pointer"
             >
                 <Download className="w-4 h-4" /> ダウンロード
-            </a>
+            </button>
             <div className="flex items-center gap-2 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-500/20">
                 <label className="cursor-pointer flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition">
                     <Upload className="w-4 h-4" />
