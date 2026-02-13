@@ -13,19 +13,23 @@ interface Props {
 export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams, onGenerate, isLoading }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 【修正】クライアントサイドでJSONファイルを生成してダウンロード
+  // 【重要修正】サーバー通信を行わず、画面のstateを直接JSONファイル化してダウンロードする
   const handleDownloadSettings = () => {
-    // 現在のstateをJSON文字列に変換
+    // 1. 現在の画面の状態(state)をJSONテキストに変換
     const jsonString = JSON.stringify(state, null, 2);
-    // Blobオブジェクトを作成
+    
+    // 2. ブラウザ内でファイルデータ(Blob)を作成
     const blob = new Blob([jsonString], { type: 'application/json' });
-    // ダウンロードリンクを作成してクリック
+    
+    // 3. 一時的なダウンロードリンクを作成してクリックさせる
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'settings.json';
     document.body.appendChild(link);
     link.click();
+    
+    // 4. 後始末
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
@@ -35,6 +39,7 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
        const formData = new FormData();
        formData.append('file', e.target.files[0]);
        try {
+           // アップロード処理はサーバー側で行い、解析結果を受け取る
            const res = await fetch('/api/settings/upload', { method: 'POST', body: formData });
            
            const contentType = res.headers.get("content-type");
@@ -144,7 +149,7 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
             現在の設定をダウンロードして保存するか、アップロードして復元します。
         </p>
         <div className="flex flex-wrap gap-4">
-            {/* 【修正】サーバー経由リンクではなく、関数実行ボタンに変更 */}
+            {/* 【重要修正】ここが <a> タグではなく、onClickイベントを持つ <button> である必要があります */}
             <button 
                 onClick={handleDownloadSettings}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition cursor-pointer"
