@@ -63,6 +63,8 @@ def index():
 def generate_candidates():
     global DATA_STORE
     req = request.json
+    
+    # パラメータ保存
     DATA_STORE.update({
         'gemini_key': req.get('gemini_key'),
         'amplify_token': req.get('amplify_token'),
@@ -70,22 +72,42 @@ def generate_candidates():
         'topic_sub1': req.get('topic_sub1'),
         'topic_sub2': req.get('topic_sub2'),
         'params': req.get('params'),
-        'bbo_history': []
     })
+    
+    # 追記モードフラグとターゲットタイプ
+    is_append = req.get('append', False)
+    target_type = req.get('target_type', None)
+    
+    # append=Falseならリセット
+    if not is_append:
+        DATA_STORE['candidates'] = []
+        DATA_STORE['bbo_history'] = []
+        
     save_settings(DATA_STORE)
     
     try:
-        candidates = LogicHandler.generate_candidates_api(
+        new_candidates_objs = LogicHandler.generate_candidates_api(
             DATA_STORE['gemini_key'],
             DATA_STORE['topic_main'],
             DATA_STORE['topic_sub1'],
             DATA_STORE['topic_sub2'],
-            DATA_STORE['params']
+            DATA_STORE['params'],
+            target_type=target_type # タイプ指定を渡す
         )
-        DATA_STORE['candidates'] = [c.to_dict() for c in candidates]
+        
+        # IDの再採番（追記時の重複防止）
+        start_id = 0
+        if DATA_STORE['candidates']:
+            start_id = max(c['id'] for c in DATA_STORE['candidates']) + 1
+            
+        for i, c in enumerate(new_candidates_objs):
+            c.id = start_id + i
+            DATA_STORE['candidates'].append(c.to_dict())
+            
         save_settings(DATA_STORE)
         return jsonify({"status": "success", "candidates": DATA_STORE['candidates']})
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/update_rating', methods=['POST'])
@@ -181,7 +203,6 @@ def bbo_reset():
 def generate_draft():
     global DATA_STORE
     req = request.json
-    # 【修正】APIキーが送られてきた場合は更新する
     if req.get('gemini_key'):
         DATA_STORE['gemini_key'] = req.get('gemini_key')
         save_settings(DATA_STORE)
@@ -212,7 +233,6 @@ def save_draft_edit():
 def generate_final():
     global DATA_STORE
     req = request.json
-    # 【修正】APIキーが送られてきた場合は更新する
     if req and req.get('gemini_key'):
         DATA_STORE['gemini_key'] = req.get('gemini_key')
         save_settings(DATA_STORE)
@@ -259,23 +279,14 @@ def upload_settings():
     try:
         f.seek(0)
         content_bytes = f.read()
-        
-        if len(content_bytes) == 0:
-            return jsonify({"status": "error", "message": "File is empty"}), 400
+        if len(content_bytes) == 0: return jsonify({"status": "error", "message": "File is empty"}), 400
             
-        try:
-            content = content_bytes.decode('utf-8-sig').strip()
-        except UnicodeDecodeError:
-            content = content_bytes.decode('utf-8', errors='ignore').strip()
+        try: content = content_bytes.decode('utf-8-sig').strip()
+        except UnicodeDecodeError: content = content_bytes.decode('utf-8', errors='ignore').strip()
         
-        if not content:
-            return jsonify({"status": "error", "message": "File content is empty"}), 400
-            
+        if not content: return jsonify({"status": "error", "message": "File content is empty"}), 400
         if content.lstrip().startswith('<'):
-             return jsonify({
-                 "status": "error", 
-                 "message": "HTMLファイルがアップロードされました。設定タブから「ダウンロード」し直した正しいJSONファイルを使用してください。"
-             }), 400
+             return jsonify({ "status": "error", "message": "HTMLファイルです。正しいJSONファイルを使用してください。" }), 400
 
         data = json.loads(content)
         DATA_STORE.update(data)

@@ -74,35 +74,60 @@ class LogicHandler:
         return {"constraint": constraint_val}
 
     @staticmethod
-    def generate_candidates_api(api_key, topic_main, topic_sub1, topic_sub2, params):
+    def generate_candidates_api(api_key, topic_main, topic_sub1, topic_sub2, params, target_type=None):
         if not HAS_GENAI: raise Exception("gemini lib missing")
-        # 【修正】APIキーの存在チェックを追加
         if not api_key: raise Exception("Gemini APIキーが設定されていません。タブ1で入力してください。")
         
         genai.configure(api_key=api_key)
-        
-        # 【修正】モデル名を修正（2.5は存在しない可能性があるため1.5へ）
         model = genai.GenerativeModel("gemini-2.5-flash")
         
+        # ターゲットタイプに応じたプロンプトの構築
+        if target_type == "Scene Craft":
+            instruction = """
+            「Scene Craft」（シーン描写）の執筆ブロックを10個生成してください。
+            【重要】
+            - キャラクターの会話や心理描写は含めないでください。
+            - 情景、五感（視覚、聴覚、嗅覚など）、場の雰囲気、物理的な環境描写に特化してください。
+            """
+            json_format = '{{ "type": "Scene Craft", "text": "...", "scores": {{ "relevance": 0.5, "desc_style": 0.5, "perspective": 0.5, "sensory": 0.5, "thought": 0.5, "tension": 0.5, "reality": 0.5 }} }}'
+        elif target_type == "Character Dynamics":
+            instruction = """
+            「Character Dynamics」（キャラクター造形）の執筆ブロックを10個生成してください。
+            【重要】
+            - 長い情景描写は避けてください。
+            - キャラクターの性格、話し方、心理、信念、対話、人間関係の力学に特化してください。
+            """
+            json_format = '{{ "type": "Character Dynamics", "text": "...", "scores": {{ "relevance": 0.5, "char_count": 0.2, "char_mental": 0.5, "char_belief": 0.5, "char_trauma": 0.0, "char_voice": 0.5 }} }}'
+        else:
+            # フォールバック（指定がない場合）
+            instruction = "「Scene Craft」（シーン描写）5個と「Character Dynamics」（キャラクター造形）5個、合計10個の執筆ブロックを生成してください。"
+            json_format = '{{ "type": "...", "text": "...", "scores": {{ ... }} }}'
+
         prompt = f"""
-        以下の設定に基づいて、10個の執筆ブロック（「Scene Craft」（シーン描写）5個、「Character Dynamics」（キャラクター造形）5個）を日本語で生成してください。
+        以下の設定に基づいて、日本語で執筆ブロックを生成してください。
         
         メイン設定: {topic_main}
         サブ設定1: {topic_sub1}
         サブ設定2: {topic_sub2}
         
-        以下の有効なJSONリストのみを返してください。
-        "type"は厳密に "Scene Craft" または "Character Dynamics" としてください。
+        指示: {instruction}
+        
+        以下の有効なJSONリストのみを返してください。JSON以外の解説は不要です。
         
         [
-          {{ "type": "Scene Craft", "text": "...", "scores": {{ "relevance": 0.5, "desc_style": 0.5, "perspective": 0.5, "sensory": 0.5, "thought": 0.5, "tension": 0.5, "reality": 0.5 }} }},
-          {{ "type": "Character Dynamics", "text": "...", "scores": {{ "relevance": 0.5, "char_count": 0.2, "char_mental": 0.5, "char_belief": 0.5, "char_trauma": 0.0, "char_voice": 0.5 }} }}
+          {json_format},
+          ...
         ]
         """
+        
         text = LogicHandler._safe_generate(model, prompt).replace("```json", "").replace("```", "").strip()
-        start, end = text.find("["), text.rfind("]")
-        data = json.loads(text[start:end+1])
-        return [DraftItem(i, item["text"], item["type"], item["scores"].get("relevance", 0.5), item["scores"]) for i, item in enumerate(data)]
+        try:
+            start, end = text.find("["), text.rfind("]")
+            data = json.loads(text[start:end+1])
+            return [DraftItem(i, item["text"], item["type"], item["scores"].get("relevance", 0.5), item["scores"]) for i, item in enumerate(data)]
+        except Exception as e:
+            print(f"JSON Parse Error: {text}")
+            raise Exception(f"生成データの解析に失敗しました。もう一度試してください。({str(e)})")
 
     @staticmethod
     def _create_vector(item):
@@ -130,9 +155,6 @@ class LogicHandler:
 
     @staticmethod
     def _solve_multi_stage(token, model_objs, model_constraints, q, candidates, target_length, weights):
-        """
-        Mult-stage optimization with customizable weights and console logging.
-        """
         client = FixstarsClient()
         client.token = token
         
@@ -148,7 +170,7 @@ class LogicHandler:
             except: pass
             return 0
         
-        # --- Step 1: Constraint Only to get magnitude (Approximation) ---
+        # Step 1
         print("\n=== [Step 1] Scale Estimation ===")
         client.parameters.timeout = 2000
         model_step1 = model_constraints
@@ -165,14 +187,13 @@ class LogicHandler:
         if values_step1 is not None:
             approx_len = sum([len(c.text) for i, c in enumerate(candidates) if get_bit_value(values_step1, q[i], i) > 0.5])
             print(f"Step1 Approx Length: {approx_len} (Target: {target_length})")
-            
             for key, obj in model_objs.items():
                 val = abs(obj.evaluate(values_step1))
-                scales[key] = max(val, 0.1) # Avoid zero division
+                scales[key] = max(val, 0.1)
         else:
             for key in model_objs.keys(): scales[key] = 1.0
             
-        # --- Step 2: Weighted & Normalized Solve ---
+        # Step 2
         print("\n=== [Step 2] Weighted Optimization ===")
         w_constraint = weights.get('constraint', 1.0)
         model_final = model_constraints * w_constraint
@@ -187,7 +208,6 @@ class LogicHandler:
         client.parameters.timeout = 4000
         result = solve(model_final, client)
         
-        # --- Extract Solutions & Plot Data ---
         plot_data = []
         solutions = []
         if hasattr(result, 'solutions'): solutions = result.solutions
@@ -211,12 +231,10 @@ class LogicHandler:
                 val = final_val + (start_val - final_val) * ((1.0 - t)**2)
                 plot_data.append({"time": t, "value": val})
 
-        # Apply best solution
         values = None
         if hasattr(result, 'best'): values = result.best.values
         elif isinstance(result, list) and len(result) > 0: values = result[0].values
         
-        # Fallback
         step2_has_selection = False
         if values is not None:
             for i in range(len(candidates)):
@@ -227,18 +245,10 @@ class LogicHandler:
              values = values_step1
              print("Step 2 yield no selection. Reverting to Step 1 results.")
         
-        # Update Candidates & Log Final Values
         updated_candidates = []
         final_selected_len = 0
         
         print("\n=== Final Results ===")
-        if values is not None:
-            for key, obj in model_objs.items():
-                try:
-                    raw_val = obj.evaluate(values)
-                    print(f"{key} (Raw Value): {raw_val:.4f}")
-                except: pass
-        
         for i, c in enumerate(candidates):
             val = get_bit_value(values, q[i], i)
             c.selected = (val > 0.5)
@@ -248,7 +258,6 @@ class LogicHandler:
         
         target_val = float(target_length) if target_length else 500.0
         constraint_val = 0.001 * (final_selected_len - target_val)**2
-        print(f"Constraint (Raw Value): {constraint_val:.4f}")
         print(f"Final Length: {final_selected_len} / {target_val}")
         print("=====================\n")
             
@@ -266,10 +275,7 @@ class LogicHandler:
         target = float(params['length'])
         h_len_penalty = 0.001 * (current_len - target)**2
         
-        weights = {
-            "diff": 1.0,
-            "constraint": 1.0
-        }
+        weights = { "diff": 1.0, "constraint": 1.0 }
         
         return LogicHandler._solve_multi_stage(
             token, 
@@ -306,11 +312,7 @@ class LogicHandler:
         target = float(params['length'])
         h_len_penalty = 0.001 * (current_len - target)**2
         
-        weights = {
-            "pref": 10.0,
-            "diff": 1.0,
-            "constraint": 1.0
-        }
+        weights = { "pref": 10.0, "diff": 1.0, "constraint": 1.0 }
         
         return LogicHandler._solve_multi_stage(
             token,
@@ -322,11 +324,9 @@ class LogicHandler:
     @staticmethod
     def generate_draft(api_key, selected, params):
         if not HAS_GENAI: raise Exception("gemini lib missing")
-        # 【修正】APIキーの存在チェックを追加
         if not api_key: raise Exception("Gemini APIキーが設定されていません。設定タブで入力してください。")
         
         genai.configure(api_key=api_key)
-        # 【修正】モデル名を1.5へ
         model = genai.GenerativeModel("gemini-2.5-flash")
         
         materials = "\n".join([f"[{item['type']}] {item['text']}" for item in selected])
@@ -371,11 +371,8 @@ class LogicHandler:
     @staticmethod
     def generate_final(api_key, draft, instr):
         if not HAS_GENAI: raise Exception("gemini lib missing")
-        # 【修正】APIキーの存在チェックを追加
         if not api_key: raise Exception("Gemini APIキーが設定されていません。設定タブで入力してください。")
         
         genai.configure(api_key=api_key)
-        # 【修正】モデル名を1.5へ
         model = genai.GenerativeModel("gemini-2.5-flash")
-        
         return LogicHandler._safe_generate(model, f"以下の指示に基づいてこの文章を推敲してください: {instr}\n文章:\n{draft}")
