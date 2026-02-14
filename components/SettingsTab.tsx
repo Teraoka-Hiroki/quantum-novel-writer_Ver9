@@ -224,17 +224,17 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
             {renderSlider("感覚描写 少", "感覚描写 多", state.params.p_sensory, 'p_sensory')}
             {renderSlider("内面隠蔽", "内面吐露", state.params.p_thought, 'p_thought')}
             {renderSlider("弛緩", "緊張", state.params.p_tension, 'p_tension')}
-            {renderSlider("現実的", "幻想的", state.params.p_reality, 'p_reality')}
+            {renderSlider("現実感（低）", "現実感（高）", state.params.p_reality, 'p_reality')}
         </div>
         <div>
             <h6 className="text-blue-400 border-b border-slate-700 pb-2 mb-4 flex items-center font-semibold">
                 <Users className="w-4 h-4 mr-2" /> キャラクター造形 (Character Dynamics)
             </h6>
             {renderSlider("0人", "5人", state.params.p_char_count, 'p_char_count', 0.2)}
-            {renderSlider("メンタル弱", "メンタル強", state.params.p_char_mental, 'p_char_mental')}
-            {renderSlider("病的", "健全", state.params.p_char_belief, 'p_char_belief')}
+            {renderSlider("心理描写（弱）", "心理描写（強）", state.params.p_char_mental, 'p_char_mental')}
+            {renderSlider("信念（弱）", "信念（強）", state.params.p_char_belief, 'p_char_belief')}
             {renderSlider("トラウマ無", "トラウマ有", state.params.p_char_trauma, 'p_char_trauma')}
-            {renderSlider("主張 弱", "主張 強", state.params.p_char_voice, 'p_char_voice')}
+            {renderSlider("主張（弱）", "主張（強）", state.params.p_char_voice, 'p_char_voice')}
             
             <div className="mt-6 pt-4 border-t border-slate-700">
                 <div className="flex justify-between items-center mb-2">
@@ -265,7 +265,7 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
             ) : (
                 <Zap className="w-5 h-5 mr-2" />
             )}
-            候補を生成 (各15個)
+            候補を生成 (各8個)
         </button>
       </div>
     </div>

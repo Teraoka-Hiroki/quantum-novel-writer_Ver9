@@ -114,6 +114,7 @@ export const OptimizationTab: React.FC<Props> = ({
                 </button>
             </div>
             <p className="text-sm text-gray-300 mb-4 leading-relaxed">
+                ブラックボックス最適化（BBO）を使用して、生成されたブロックの組み合わせをあなたの好みに基づいて最適化します。<br/>
                 生成されたブロックを評価してください（1: 拒否 - 5: 採用）。<br/>
                 「学習して最適化」をクリックすると、あなたの好みに基づいて量子アニーリングマシンが最適な組み合わせを探索します。
             </p>
