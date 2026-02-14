@@ -265,7 +265,7 @@ export const SettingsTab: React.FC<Props> = ({ state, updateState, updateParams,
             ) : (
                 <Zap className="w-5 h-5 mr-2" />
             )}
-            候補を生成 (各8個)
+            候補を生成 (各５個)
         </button>
       </div>
     </div>
