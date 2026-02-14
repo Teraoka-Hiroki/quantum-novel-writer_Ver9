@@ -99,7 +99,7 @@ class LogicHandler:
         # ターゲットタイプに応じたプロンプトの構築
         if target_type == "Scene Craft":
             instruction = f"""
-            「Scene Craft」（シーン描写）の執筆ブロックを８個生成してください。各ブロック記事は１８０字程度にしてください。
+            「Scene Craft」（シーン描写）の執筆ブロックを５個生成してください。各ブロック記事は１８０字程度にしてください。
             【重要方針】
             以下のパラメータ（0.0=弱い/少ない 〜 1.0=強い/多い）を反映した描写にしてください：
             - 描写の密度(desc_style): {p_desc}
@@ -117,7 +117,7 @@ class LogicHandler:
         
         elif target_type == "Character Dynamics":
             instruction = f"""
-            「Character Dynamics」（キャラクター造形）の執筆ブロックを８個生成してください。各ブロック記事は１８０字程度にしてください。
+            「Character Dynamics」（キャラクター造形）の執筆ブロックを５個生成してください。各ブロック記事は１８０字程度にしてください。
             【重要方針】
             以下のパラメータ（0.0=弱い/少ない 〜 1.0=強い/多い）を反映した描写にしてください：
             - 登場人数(char_count): {p_c_cnt} (高いほど多人数)
@@ -133,7 +133,7 @@ class LogicHandler:
         
         else:
             # フォールバック
-            instruction = "「Scene Craft」（シーン描写）８個と「Character Dynamics」（キャラクター造形）８個、合計１６個の執筆ブロックを生成してください。各ブロック記事は１８０字程度にしてください。"
+            instruction = "「Scene Craft」（シーン描写）８個と「Character Dynamics」（キャラクター造形）５個、合計１０個の執筆ブロックを生成してください。各ブロック記事は１８０字程度にしてください。"
             json_format = '{{ "type": "...", "text": "...", "scores": {{ ... }} }}'
 
         prompt = f"""
