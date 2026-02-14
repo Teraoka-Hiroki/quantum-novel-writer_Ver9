@@ -7,12 +7,14 @@ export const generateCandidates = async (
   topic_main: string,
   topic_sub1: string,
   topic_sub2: string,
-  params: AppState['params']
+  params: AppState['params'],
+  target_type?: string, // 追加
+  append: boolean = false // 追加
 ) => {
   const res = await fetch(`${API_BASE}/generate_candidates`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gemini_key, topic_main, topic_sub1, topic_sub2, params }),
+    body: JSON.stringify({ gemini_key, topic_main, topic_sub1, topic_sub2, params, target_type, append }),
   });
   return res.json();
 };
@@ -81,8 +83,6 @@ export const generateFinal = async (data?: { gemini_key?: string }) => {
 };
 
 export const uploadSettings = async (file: File) => {
-    // Note: This function is likely handled directly in the component via fetch/FormData
-    // but kept here for consistency if needed.
     const formData = new FormData();
     formData.append('file', file);
     const res = await fetch(`${API_BASE}/settings/upload`, {
