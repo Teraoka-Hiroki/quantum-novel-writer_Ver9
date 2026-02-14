@@ -38,34 +38,60 @@ const App: React.FC = () => {
   const updateState = (updates: Partial<AppState>) => setState(prev => ({ ...prev, ...updates }));
   const updateParams = (updates: Partial<Params>) => setState(prev => ({ ...prev, params: { ...prev.params, ...updates } }));
 
+  // 【修正】生成リクエストを2回に分割して実行
   const handleGenerateCandidates = async () => {
     setIsLoading(true);
-    setLoadingText("Geminiが候補を生成中...");
+    
     try {
-        const res = await api.generateCandidates(
-            state.gemini_key, state.topic_main, state.topic_sub1, state.topic_sub2, state.params
+        // Step 1: Scene Craft (10個)
+        setLoadingText("Geminiが候補を生成中... (1/2: Scene Craft)");
+        const res1 = await api.generateCandidates(
+            state.gemini_key, 
+            state.topic_main, 
+            state.topic_sub1, 
+            state.topic_sub2, 
+            state.params,
+            "Scene Craft", // type指定
+            false // append=False (初期化)
         );
-        if (res.status === 'success') {
-            updateState({ candidates: res.candidates });
-            setActiveTab(1); // Move to Optimization Tab
+        
+        if (res1.status === 'success') {
+             updateState({ candidates: res1.candidates });
         } else {
-            alert("エラー: " + res.message);
+             throw new Error(res1.message);
         }
-    } catch (e) {
-        alert("通信エラーが発生しました。");
+
+        // Step 2: Character Dynamics (10個)
+        setLoadingText("Geminiが候補を生成中... (2/2: Character Dynamics)");
+        const res2 = await api.generateCandidates(
+            state.gemini_key, 
+            state.topic_main, 
+            state.topic_sub1, 
+            state.topic_sub2, 
+            state.params,
+            "Character Dynamics", // type指定
+            true // append=True (追記)
+        );
+
+        if (res2.status === 'success') {
+             updateState({ candidates: res2.candidates });
+             setActiveTab(1); // Move to Optimization Tab
+        } else {
+             throw new Error(res2.message);
+        }
+
+    } catch (e: any) {
+        alert("エラーが発生しました: " + (e.message || "通信エラー"));
     } finally {
         setIsLoading(false);
     }
   };
 
   const updateCandidateRating = async (id: number, rating: number) => {
-      // Update local state immediately for UI responsiveness
       const newCandidates = state.candidates.map(c => 
           c.id === id ? { ...c, user_rating: rating } : c
       );
       updateState({ candidates: newCandidates });
-      
-      // Sync with backend
       await api.updateCandidateRating(id, rating);
   };
 
