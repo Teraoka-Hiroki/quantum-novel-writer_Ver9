@@ -5,16 +5,27 @@ import { RotateCcw, Send, Cpu, Layers, Target, AlignJustify } from 'lucide-react
 
 interface Props {
   state: AppState;
+  updateState: (updates: Partial<AppState>) => void;
   updateCandidateRating: (id: number, rating: number) => void;
   runBBO: () => void;
-  runLegacyOptimization: () => void;
+  runLegacy: () => void; // 【修正】App.tsxに合わせて名前を変更
   resetBBO: () => void;
   isLoading: boolean;
+  plotData: any[]; // 【追加】グラフデータを受け取る
 }
 
-export const OptimizationTab: React.FC<Props> = ({ state, updateCandidateRating, runBBO, runLegacyOptimization, resetBBO, isLoading }) => {
+export const OptimizationTab: React.FC<Props> = ({ 
+  state, 
+  updateState,
+  updateCandidateRating, 
+  runBBO, 
+  runLegacy, // 【修正】名前を変更
+  resetBBO, 
+  isLoading, 
+  plotData // 【追加】
+}) => {
   
-  // ★追加: 現在選択されているブロックの統計情報を計算
+  // 現在選択されているブロックの統計情報を計算
   const selectedCandidates = state.candidates.filter(c => c.selected);
   const currentLength = selectedCandidates.reduce((sum, c) => sum + c.text.length, 0);
   const targetLength = state.params.length;
@@ -68,7 +79,6 @@ export const OptimizationTab: React.FC<Props> = ({ state, updateCandidateRating,
                         <span className="font-bold text-blue-400 flex items-center">
                             <Target className="w-3 h-3 mr-1" /> 適合度: {item.relevance.toFixed(2)}
                         </span>
-                        {/* 文字数も表示しておくと親切 */}
                         <span className="bg-slate-700/50 px-2 py-0.5 rounded-full flex items-center">
                             <AlignJustify className="w-3 h-3 mr-1" /> {item.text.length}文字
                         </span>
@@ -123,12 +133,10 @@ export const OptimizationTab: React.FC<Props> = ({ state, updateCandidateRating,
                 </button>
             </div>
             
-            {/* Display Approximate Scales if available */}
             {state.optimization_scales && (
                 <div className="mt-4 pt-3 border-t border-slate-600/50 flex flex-wrap gap-4 text-xs text-gray-300 items-center">
                     <span className="font-semibold">最適化ステータス:</span>
                     
-                    {/* ★追加: 文字数ステータスの可視化 */}
                     <div className={`px-2 py-0.5 rounded flex items-center border ${Math.abs(diffLength) < 10 ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-300' : 'bg-amber-900/30 border-amber-500/30 text-amber-300'}`}>
                         <AlignJustify className="w-3 h-3 mr-1" />
                         合計文字数: <strong className="mx-1 text-sm">{currentLength}</strong> / {targetLength} 
@@ -155,7 +163,7 @@ export const OptimizationTab: React.FC<Props> = ({ state, updateCandidateRating,
                 <p className="text-xs text-gray-500">青くハイライトされたカードが現在の最適な選択です。</p>
             </div>
             <button 
-                onClick={runLegacyOptimization}
+                onClick={runLegacy} // 【修正】正しい関数名を使用
                 disabled={isLoading}
                 className="text-xs border border-slate-600 text-gray-400 hover:text-white px-3 py-1 rounded-full transition flex items-center"
             >
@@ -181,9 +189,10 @@ export const OptimizationTab: React.FC<Props> = ({ state, updateCandidateRating,
                 <Target className="w-4 h-4 mr-2" /> BBO 最適化グラフ
             </h6>
             <div className="bg-slate-900 rounded-lg p-4 h-[300px] flex items-center justify-center border border-slate-800">
-                {state.optimization_plot_data && state.optimization_plot_data.length > 0 ? (
+                {/* 【修正】state.optimization_plot_data ではなく prop の plotData を使用 */}
+                {plotData && plotData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={state.optimization_plot_data}>
+                        <LineChart data={plotData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                             <XAxis 
                                 dataKey="time" 

@@ -48,7 +48,8 @@ export const FinalTab: React.FC<Props> = ({ state, generateFinal, isLoading, upd
           <textarea 
             className="w-full h-full bg-slate-900 text-gray-100 p-6 leading-loose font-serif text-lg resize-none focus:outline-none"
             value={state.final_text}
-            readOnly
+            // 【修正】readOnlyを削除し、編集可能にする
+            onChange={(e) => updateState({ final_text: e.target.value })}
             placeholder="ここに最終的な小説が出力されます..."
           />
       </div>
