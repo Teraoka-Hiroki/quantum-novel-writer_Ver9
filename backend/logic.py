@@ -81,25 +81,58 @@ class LogicHandler:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-2.5-flash")
         
+        # パラメータの値を文字列化してプロンプトに埋め込む準備
+        # 0.0(低) 〜 1.0(高)
+        p_desc = params.get('p_desc_style', 0.5)
+        p_pers = params.get('p_perspective', 0.5)
+        p_sens = params.get('p_sensory', 0.5)
+        p_thou = params.get('p_thought', 0.5)
+        p_tens = params.get('p_tension', 0.5)
+        p_real = params.get('p_reality', 0.5)
+        
+        p_c_cnt = params.get('p_char_count', 0.2)
+        p_c_men = params.get('p_char_mental', 0.5)
+        p_c_bel = params.get('p_char_belief', 0.5)
+        p_c_tru = params.get('p_char_trauma', 0.0)
+        p_c_voi = params.get('p_char_voice', 0.5)
+
         # ターゲットタイプに応じたプロンプトの構築
         if target_type == "Scene Craft":
-            instruction = """
-            「Scene Craft」（シーン描写）の執筆ブロックを10個生成してください。
-            【重要】
-            - キャラクターの会話や心理描写は含めないでください。
-            - 情景、五感（視覚、聴覚、嗅覚など）、場の雰囲気、物理的な環境描写に特化してください。
+            instruction = f"""
+            「Scene Craft」（シーン描写）の執筆ブロックを8個生成してください。
+            【重要方針】
+            以下のパラメータ（0.0=弱い/少ない 〜 1.0=強い/多い）を反映した描写にしてください：
+            - 描写の密度(desc_style): {p_desc}
+            - 視点の主観性(perspective): {p_pers}
+            - 感覚的表現(sensory): {p_sens}
+            - 内面的思考(thought): {p_thou}
+            - 緊張感(tension): {p_tens}
+            - 現実味(reality): {p_real}
+
+            【制約】
+            - キャラクターの会話や心理描写は最小限にし、情景や雰囲気を優先してください。
+            - 各ブロックは独立したシーンとして成立させてください。
             """
             json_format = '{{ "type": "Scene Craft", "text": "...", "scores": {{ "relevance": 0.5, "desc_style": 0.5, "perspective": 0.5, "sensory": 0.5, "thought": 0.5, "tension": 0.5, "reality": 0.5 }} }}'
+        
         elif target_type == "Character Dynamics":
-            instruction = """
-            「Character Dynamics」（キャラクター造形）の執筆ブロックを10個生成してください。
-            【重要】
-            - 長い情景描写は避けてください。
-            - キャラクターの性格、話し方、心理、信念、対話、人間関係の力学に特化してください。
+            instruction = f"""
+            「Character Dynamics」（キャラクター造形）の執筆ブロックを8個生成してください。
+            【重要方針】
+            以下のパラメータ（0.0=弱い/少ない 〜 1.0=強い/多い）を反映した描写にしてください：
+            - 登場人数(char_count): {p_c_cnt} (高いほど多人数)
+            - 心理描写の深さ(char_mental): {p_c_men}
+            - 信念の強さ(char_belief): {p_c_bel}
+            - トラウマの影響(char_trauma): {p_c_tru}
+            - 口調の特徴度(char_voice): {p_c_voi}
+
+            【制約】
+            - 長い情景描写は避け、キャラクターの言動や心理に焦点を当ててください。
             """
             json_format = '{{ "type": "Character Dynamics", "text": "...", "scores": {{ "relevance": 0.5, "char_count": 0.2, "char_mental": 0.5, "char_belief": 0.5, "char_trauma": 0.0, "char_voice": 0.5 }} }}'
+        
         else:
-            # フォールバック（指定がない場合）
+            # フォールバック
             instruction = "「Scene Craft」（シーン描写）5個と「Character Dynamics」（キャラクター造形）5個、合計10個の執筆ブロックを生成してください。"
             json_format = '{{ "type": "...", "text": "...", "scores": {{ ... }} }}'
 
@@ -113,6 +146,7 @@ class LogicHandler:
         指示: {instruction}
         
         以下の有効なJSONリストのみを返してください。JSON以外の解説は不要です。
+        各scoresには、生成した文章が実際に持っている特性値を0.0〜1.0で自己評価して入れてください。
         
         [
           {json_format},
