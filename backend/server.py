@@ -310,4 +310,6 @@ def upload_settings():
         return jsonify({"status": "error", "message": str(e)}), 400
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # 【修正】Renderの環境変数からポートを取得し、外部(0.0.0.0)に公開する
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
